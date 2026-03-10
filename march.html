@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Restaurant Competitor Price Watcher</title>
+
+<style>
+body{
+font-family:Arial;
+background:#fff4e6;
+text-align:center;
+padding:30px;
+}
+
+.section{display:none;}
+
+button{
+padding:10px 20px;
+background:#e65c00;
+color:white;
+border:none;
+margin:5px;
+cursor:pointer;
+}
+
+input{
+padding:10px;
+margin:5px;
+width:200px;
+}
+
+table{
+margin:20px auto;
+border-collapse:collapse;
+width:90%;
+background:white;
+}
+
+th,td{
+border:1px solid #e65c00;
+padding:10px;
+}
+
+th{
+background:#e65c00;
+color:white;
+}
+
+.bar{
+background:#ffa366;
+margin:5px;
+color:white;
+padding:5px;
+}
+
+.result-box{
+background:white;
+padding:20px;
+margin-top:20px;
+display:inline-block;
+width:60%;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="loginSection" class="section">
+
+<h1>🍕 Login</h1>
+
+<input id="loginUsername" placeholder="Username"><br>
+<input type="password" id="loginPassword" placeholder="Password"><br>
+
+<button onclick="login()">Login</button>
+
+<br><br>
+
+<button onclick="showSignup()">Create Account</button>
+
+</div>
+
+
+<!-- SIGNUP -->
+<div id="signupSection" class="section">
+
+<h1>Create Account</h1>
+
+<input id="signupUsername" placeholder="Username"><br>
+<input type="password" id="signupPassword" placeholder="Password"><br>
+
+<select id="signupRole">
+<option value="manager">Restaurant Manager</option>
+<option value="admin">Admin</option>
+</select>
+
+<br><br>
+
+<button onclick="signup()">Signup</button>
+<button onclick="showLogin()">Back</button>
+
+</div>
+
+
+<!-- ANALYZE -->
+<div id="analyzeSection" class="section">
+
+<h1>Analyze Dish Price</h1>
+
+<button onclick="logout()">Logout</button>
+<button onclick="showDashboard()">Dashboard</button>
+<button onclick="showAdmin()">Admin Controls</button>
+
+<br><br>
+
+<input id="dishName" placeholder="Dish name">
+<input id="yourPrice" type="number" placeholder="Your price">
+
+<button onclick="analyzePrice()">Analyze</button>
+
+<div id="result" class="result-box" style="display:none"></div>
+
+</div>
+
+
+<!-- ADMIN -->
+<div id="adminSection" class="section">
+
+<h1>Admin Controls</h1>
+
+<button onclick="showAnalyze()">Back</button>
+<button onclick="logout()">Logout</button>
+
+<h2>Dish List</h2>
+
+<div id="dishList"></div>
+
+<h3>Add Dish</h3>
+
+<input id="newDish" placeholder="Dish name">
+<input id="newPrices" placeholder="Prices comma separated">
+
+<button onclick="addDish()">Add Dish</button>
+
+<br><br>
+
+<button onclick="exportCSV()">Export CSV</button>
+
+</div>
+
+
+<!-- DASHBOARD -->
+<div id="dashboardSection" class="section">
+
+<h1>Dashboard</h1>
+
+<button onclick="showAnalyze()">Back</button>
+<button onclick="logout()">Logout</button>
+
+<input id="searchDish" placeholder="Search dish">
+<button onclick="searchDish()">Search</button>
+
+<div id="dashboardTable"></div>
+
+</div>
+
+
+<script>
+
+/* ---------------- SECURITY UTILITIES ---------------- */
+
+function sanitize(text){
+return text.replace(/[<>]/g,"");
+}
+
+async function hashPassword(password){
+
+const msgUint8 = new TextEncoder().encode(password);
+const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
+const hashArray = Array.from(new Uint8Array(hashBuffer));
+const hashHex = hashArray.map(b => b.toString(16).padStart(2,"0")).join("");
+
+return hashHex;
+
+}
+
+function requireLogin(){
+
+if(!localStorage.getItem("loggedInUser")){
+alert("Please login first");
+showSection("loginSection");
+return false;
+}
+
+return true;
+
+}
+
+function requireAdmin(){
+
+let role = localStorage.getItem("loggedRole");
+
+if(role !== "admin"){
+alert("Admin access only");
+return false;
+}
+
+return true;
+
+}
+
+
+/* ---------------- LOGIN SYSTEM ---------------- */
+
+let loginAttempts = 0;
+
+async function signup(){
+
+let user = sanitize(document.getElementById("signupUsername").value);
+let pass = document.getElementById("signupPassword").value;
+let role = document.getElementById("signupRole").value;
+
+if(user.length < 3 || pass.length < 4){
+alert("Invalid username or password");
+return;
+}
+
+let hashed = await hashPassword(pass);
+
+let userObj = {
+password:hashed,
+role:role
+};
+
+localStorage.setItem("user_"+user, JSON.stringify(userObj));
+
+alert("Account created");
+
+showLogin();
+
+}
+
+
+async function login(){
+
+let user = sanitize(document.getElementById("loginUsername").value);
+let pass = document.getElementById("loginPassword").value;
+
+let data = localStorage.getItem("user_"+user);
+
+if(!data){
+
+loginAttempts++;
+alert("User not found");
+
+}else{
+
+let userObj = JSON.parse(data);
+let hashed = await hashPassword(pass);
+
+if(userObj.password === hashed){
+
+localStorage.setItem("loggedInUser", user);
+localStorage.setItem("loggedRole", userObj.role);
+
+showSection("analyzeSection");
+
+loginAttempts = 0;
+
+}else{
+
+loginAttempts++;
+alert("Wrong password");
+
+}
+
+}
+
+if(loginAttempts >= 3){
+
+alert("Too many attempts. Refresh page.");
+
+}
+
+}
+
+
+function logout(){
+
+localStorage.removeItem("loggedInUser");
+localStorage.removeItem("loggedRole");
+
+showSection("loginSection");
+
+}
+
+
+/* ---------------- NAVIGATION ---------------- */
+
+function showSection(id){
+
+document.querySelectorAll(".section").forEach(s=>s.style.display="none");
+
+document.getElementById(id).style.display="block";
+
+}
+
+function showLogin(){showSection("loginSection")}
+function showSignup(){showSection("signupSection")}
+function showAnalyze(){if(requireLogin()) showSection("analyzeSection")}
+function showDashboard(){if(requireLogin()) {showSection("dashboardSection"); loadDashboard();}}
+function showAdmin(){if(requireLogin() && requireAdmin()){showSection("adminSection"); showDishList();}}
+
+
+/* ---------------- DISH DATA ---------------- */
+
+let competitorData = {
+
+burger:[120,130,125],
+pizza:[250,270,260],
+pasta:[200,210,220],
+biryani:[180,190,200]
+
+};
+
+
+/* ---------------- PRICE ANALYSIS ---------------- */
+
+function analyzePrice(){
+
+if(!requireLogin()) return;
+
+let dish = sanitize(document.getElementById("dishName").value.toLowerCase());
+let price = parseInt(document.getElementById("yourPrice").value);
+
+if(!competitorData[dish]){
+
+alert("Dish not found");
+return;
+
+}
+
+let prices = competitorData[dish];
+
+let avg = prices.reduce((a,b)=>a+b)/prices.length;
+
+let suggestion = "";
+
+if(price > avg) suggestion="Reduce price";
+else if(price < avg) suggestion="Increase price slightly";
+else suggestion="Competitive price";
+
+let bars = prices.map((p,i)=>`<div class="bar" style="width:${p}px">Competitor ${i+1}: ₹${p}</div>`).join("");
+
+let res = document.getElementById("result");
+
+res.innerHTML = `
+<h3>Competitor Prices: ${prices.join(",")}</h3>
+<h3>Average: ₹${avg.toFixed(2)}</h3>
+<p>${suggestion}</p>
+${bars}
+`;
+
+res.style.display="block";
+
+}
+
+
+/* ---------------- ADMIN FUNCTIONS ---------------- */
+
+function showDishList(){
+
+let div = document.getElementById("dishList");
+
+let table = "<table><tr><th>Dish</th><th>Prices</th><th>Action</th></tr>";
+
+for(let d in competitorData){
+
+table += `<tr>
+<td>${d}</td>
+<td>${competitorData[d].join(",")}</td>
+<td>
+<button onclick="editDish('${d}')">Edit</button>
+<button onclick="deleteDish('${d}')">Delete</button>
+</td>
+</tr>`;
+
+}
+
+table += "</table>";
+
+div.innerHTML = table;
+
+}
+
+function addDish(){
+
+if(!requireAdmin()) return;
+
+let dish = sanitize(document.getElementById("newDish").value.toLowerCase());
+
+let prices = document.getElementById("newPrices").value.split(",").map(x=>parseInt(x));
+
+competitorData[dish] = prices;
+
+showDishList();
+
+}
+
+function editDish(d){
+
+let newPrices = prompt("Enter new prices", competitorData[d].join(","));
+
+competitorData[d] = newPrices.split(",").map(x=>parseInt(x));
+
+showDishList();
+
+}
+
+function deleteDish(d){
+
+delete competitorData[d];
+
+showDishList();
+
+}
+
+
+/* ---------------- DASHBOARD ---------------- */
+
+function loadDashboard(){
+
+let div = document.getElementById("dashboardTable");
+
+let table="<table><tr><th>Dish</th><th>Prices</th><th>Average</th></tr>";
+
+for(let d in competitorData){
+
+let avg = competitorData[d].reduce((a,b)=>a+b)/competitorData[d].length;
+
+table+=`<tr>
+<td>${d}</td>
+<td>${competitorData[d].join(",")}</td>
+<td>${avg.toFixed(2)}</td>
+</tr>`;
+
+}
+
+table+="</table>";
+
+div.innerHTML=table;
+
+}
+
+function searchDish(){
+
+let key = sanitize(document.getElementById("searchDish").value.toLowerCase());
+
+let div=document.getElementById("dashboardTable");
+
+let table="<table><tr><th>Dish</th><th>Prices</th></tr>";
+
+for(let d in competitorData){
+
+if(d.includes(key)){
+
+table+=`<tr>
+<td>${d}</td>
+<td>${competitorData[d].join(",")}</td>
+</tr>`;
+
+}
+
+}
+
+table+="</table>";
+
+div.innerHTML=table;
+
+}
+
+
+/* ---------------- EXPORT ---------------- */
+
+function exportCSV(){
+
+let csv="Dish,Prices\n";
+
+for(let d in competitorData){
+
+csv += d + "," + competitorData[d].join("|") + "\n";
+
+}
+
+let blob = new Blob([csv]);
+
+let a = document.createElement("a");
+
+a.href = URL.createObjectURL(blob);
+
+a.download="price_data.csv";
+
+a.click();
+
+}
+
+
+/* ---------------- PAGE LOAD ---------------- */
+
+window.onload = function(){
+
+if(localStorage.getItem("loggedInUser"))
+showSection("analyzeSection");
+else
+showSection("loginSection");
+
+}
+
+</script>
+
+</body>
+</html>
